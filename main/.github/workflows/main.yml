@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - features/*
 
 jobs:
 
@@ -11,8 +12,12 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: mikpie/ci-template/.github/workflows/reusable-infra.yml@main
+    uses: ./.github/workflows/reusable-infra.yml
+
+    #uses: mikolajbb2002/static-web-app-deployment/ci-template/.github/workflows/reusable-infra.yml@main
     with:
       config-path: .github/labeler.yml
     secrets:
-      token: ${{ secrets.GITHUB_TOKEN }}
+      token: 
+        required: false
+        # token: ${{ secrets.GITHUB_TOKEN }}
