@@ -1,0 +1,20 @@
+name: Call reusable workflow example
+
+on:
+  pull_request:
+    branches:
+      - main
+      - features/*
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  run-labeler:
+    uses: ./.github/workflows/reusable-infra.yml
+    with:
+      config-path: .github/labeler.yml
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}
