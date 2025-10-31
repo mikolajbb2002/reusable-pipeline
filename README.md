@@ -5,8 +5,8 @@ This repository shows how to call a reusable GitHub Actions workflow that applie
 ## Layout
 - `.github/workflows/reusable-infra.yml` defines the reusable workflow exposed through `workflow_call`.
 - `.github/workflows/main.yml` triggers on pull requests (and `workflow_dispatch`) and reuses the workflow.
-- `.github/labeler.yml` holds the configuration consumed by `actions/labeler`.
-
+- `.github/labeler.yml` holds the configuration consumed by `actions/labeler` (v6+ YAML structure).
+     
 ## What happens
 1. When a pull request targets `main` (or branches under `features/`), or when you run the workflow manually, GitHub executes the caller workflow.
 2. The caller forwards the labeler config path through `with:` and passes its `GITHUB_TOKEN` as the required secret.
