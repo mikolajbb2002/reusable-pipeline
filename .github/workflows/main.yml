@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   run-labeler:
-    uses: ./.github/workflows/reusable-infra.yml
+    uses: ./ci-template/.github/workflows/reusable-infra.yml
     with:
       config-path: .github/labeler.yml
     secrets:
