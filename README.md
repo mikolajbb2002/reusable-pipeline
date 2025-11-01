@@ -3,7 +3,7 @@
 This repository shows how to call a reusable GitHub Actions workflow that applies PR labels.
 
 ## Layout
-- `ci-template/.github/workflows/reusable-infra.yml` defines the reusable workflow exposed through `workflow_call` (intended to live in a separate shared repo).
+- `.github/workflows/reusable-infra.yml` defines the reusable workflow exposed through `workflow_call`.
 - `.github/workflows/main.yml` triggers on pull requests (and `workflow_dispatch`) and reuses the workflow.
 - `.github/labeler.yml` holds the configuration consumed by `actions/labeler` (v6+ YAML structure).
      
