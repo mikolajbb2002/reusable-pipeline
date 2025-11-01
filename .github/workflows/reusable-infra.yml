@@ -6,16 +6,42 @@ on:
       config-path:
         required: true
         type: string
+      environment:
+        required: false
+        type: string
+        default: dev
+      component:
+        required: false
+        type: string
+        default: app
+      auto-apply:
+        required: false
+        type: boolean
+        default: false
     secrets:
       token:
         required: true
 
 jobs:
-  triage:
+  infrastructure:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/labeler@v6
+    - name: Initialize environment
+      run: |
+        echo "Initializing component '${{ inputs.component }}' in environment '${{ inputs.environment }}'"
+    - name: Validate configuration
+      run: |
+        echo "Running shared validation checks..."
+    - name: Plan changes
+      run: |
+        echo "Generating change plan (dry run only)."
+    - name: Apply changes
+      if: inputs.auto-apply
+      run: |
+        echo "Applying changes for '${{ inputs.component }}' in '${{ inputs.environment }}'"
+    - name: Label pull request
+      uses: actions/labeler@v6
       with:
         repo-token: ${{ secrets.token }}
         configuration-path: ${{ inputs.config-path }}
