@@ -13,3 +13,4 @@ This repository shows how to call a reusable GitHub Actions workflow that applie
 3. The reusable workflow executes shared stages (initialize → validate → plan → optionally apply changes) before running `actions/labeler@v6`, which applies labels based on `.github/labeler.yml`.
 
 Remember that GitHub limits `GITHUB_TOKEN` to read-only permissions on pull requests coming from forks, so labeling will only succeed for branches within the same repository.
+# reusable-pipeline
