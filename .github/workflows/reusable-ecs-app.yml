@@ -67,9 +67,9 @@ jobs:
         id: pick
         run: |
           if [ "${{ inputs.auto_apply }}" = "true" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "role=${{ secrets.AWS_TERRAFORM_APPLY_ROLE_ARN }}" >> $GITHUB_OUTPUT
+            echo "role=${{ secrets.aws_apply_role_arn }}" >> $GITHUB_OUTPUT
           else
-            echo "role=${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}" >> $GITHUB_OUTPUT
+            echo "role=${{ secrets.aws_plan_role_arn }}" >> $GITHUB_OUTPUT
           fi
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
