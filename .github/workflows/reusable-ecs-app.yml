@@ -48,54 +48,159 @@ concurrency:
   group: terraform-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  TF_WORKDIR: ${{ inputs.tf_workdir }}
+  AWS_REGION: ${{ inputs.aws_region }}
+  TF_VAR_region: ${{ inputs.aws_region }}
+  ECR_REPOSITORY_NAME: ${{ inputs.ecr_repository_name }}
+  ECR_IMAGE_TAG: ${{ inputs.ecr_image_tag }}
+  ECS_CLUSTER_NAME: ${{ inputs.ecs_cluster_name }}
+  ECS_SERVICE_NAME: ${{ inputs.ecs_service_name }}
+  
 jobs:
-  terraform:
+  validate:
+    name: Terraform fmt/init/validate
     runs-on: ubuntu-latest
-    env:
-      TF_WORKDIR: ${{ inputs.tf_workdir }}
-      AWS_REGION: ${{ inputs.aws_region }}
-      TF_VAR_region: ${{ inputs.aws_region }}
-      ECR_REPOSITORY_NAME: ${{ inputs.ecr_repository_name }}
-      ECR_IMAGE_TAG: ${{ inputs.ecr_image_tag }}
-      ECS_CLUSTER_NAME: ${{ inputs.ecs_cluster_name }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.token }}
-      - name: Pick role ARN
-        id: pick
+      - uses: actions/checkout@v4
+        with: 
+          token: ${{ secrets.token }} 
+      - uses: hashicorp/setup-terraform@v3
+        with: 
+          terraform_version: ${{ inputs.terraform_version }}
+      - name: terraform fmt (check)
+        run: terraform -chdir="${TF_WORKDIR}" fmt -check -diff
+      - name: terraform init (no backend)
+        run: terraform -chdir="${TF_WORKDIR}" init -backend=false -input=false
+      - name: terraform validate
+      run: terraform -chdir="${TF_WORKDIR}" validate -no-color
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+    steps:
+      - uses: actions/checkout@v4
+        with: 
+         token: ${{ secrets.token }}
+      - uses: hashicorp/setup-terraform@v3
+        with: 
+         terraform_version: ${{ inputs.terraform_version }}
+
+      - name: Check plan role ARN
         run: |
-          if [ "${{ inputs.auto_apply }}" = "true" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "role=${{ secrets.aws_apply_role_arn }}" >> $GITHUB_OUTPUT
-          else
-            echo "role=${{ secrets.aws_plan_role_arn }}" >> $GITHUB_OUTPUT
-          fi
-      - name: Configure AWS (OIDC)
+          if [ -z "${{ secrets.aws_plan_role_arn }}" ]; then
+            echo "Missing secret 'aws_plan_role_arn'." >&2; exit 1; fi
+
+      - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{  steps.pick.outputs.role }}
-          aws-region: ${{ inputs.aws_region }}
+          role-to-assume: ${{ secrets.aws_plan_role_arn }}
+          role-session-name: gha-plan-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: terraform init
+        run: terraform -chdir="${TF_WORKDIR}" init -input=false
+
+      - name: terraform plan
+        run: terraform -chdir="${TF_WORKDIR}" plan -out=tfplan -no-color
+
+      - name: terraform show (human plan)
+        run: terraform -chdir="${TF_WORKDIR}" show -no-color tfplan
+
+      - name: Upload plan artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
         with:
-          terraform_version: ${{ inputs.terraform_version }}
+          name: tfplan
+          path: ${{ env.TF_WORKDIR }}/tfplan
+          if-no-files-found: error
+          retention-days: 3
 
-      - name: Terraform Init
-        working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform init -input=false
+  apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: plan
+    if: ${{ inputs.auto_apply && github.event_name != 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+        with: 
+          token: ${{ secrets.token }} 
+      - uses: hashicorp/setup-terraform@v3
+        with: 
+             terraform_version: ${{ inputs.terraform_version }} 
+      - name: Check apply role ARN
+        run: |
+          if [ -z "${{ secrets.aws_apply_role_arn }}" ]; then
+            echo "Missing secret 'aws_apply_role_arn'." >&2; exit 1; fi
 
-      - name: Terraform Validate
-        working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform validate
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_apply_role_arn }}
+          role-session-name: gha-apply-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform Plan
-        id: plan
-        working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform plan -input=false -out=tfplan
+      - name: terraform init
+        run: terraform -chdir="${TF_WORKDIR}" init -input=false
 
-      - name: Terraform Apply (optional)
-        if: ${{ inputs.auto_apply && github.event_name != 'pull_request' }}
-        working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform apply -input=false -auto-approve tfplan
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TF_WORKDIR }}
+
+      - name: terraform apply
+        run: terraform -chdir="${TF_WORKDIR}" apply -auto-approve tfplan
+
+# jobs:
+#   terraform:
+#     runs-on: ubuntu-latest
+#     env:
+#       TF_WORKDIR: ${{ inputs.tf_workdir }}
+#       AWS_REGION: ${{ inputs.aws_region }}
+#       TF_VAR_region: ${{ inputs.aws_region }}
+#       ECR_REPOSITORY_NAME: ${{ inputs.ecr_repository_name }}
+#       ECR_IMAGE_TAG: ${{ inputs.ecr_image_tag }}
+#       ECS_CLUSTER_NAME: ${{ inputs.ecs_cluster_name }}
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
+#         with:
+#           token: ${{ secrets.token }}
+#       - name: Pick role ARN
+#         id: pick
+#         run: |
+#           if [ "${{ inputs.auto_apply }}" = "true" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
+#             echo "role=${{ secrets.aws_apply_role_arn }}" >> $GITHUB_OUTPUT
+#           else
+#             echo "role=${{ secrets.aws_plan_role_arn }}" >> $GITHUB_OUTPUT
+#           fi
+#       - name: Configure AWS (OIDC)
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: ${{  steps.pick.outputs.role }}
+#           aws-region: ${{ inputs.aws_region }}
+
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: ${{ inputs.terraform_version }}
+
+#       - name: Terraform Init
+#         working-directory: ${{ env.TF_WORKDIR }}
+#         run: terraform init -input=false
+
+#       - name: Terraform Validate
+#         working-directory: ${{ env.TF_WORKDIR }}
+#         run: terraform validate
+
+#       - name: Terraform Plan
+#         id: plan
+#         working-directory: ${{ env.TF_WORKDIR }}
+#         run: terraform plan -input=false -out=tfplan
+
+#       - name: Terraform Apply (optional)
+#         if: ${{ inputs.auto_apply && github.event_name != 'pull_request' }}
+#         working-directory: ${{ env.TF_WORKDIR }}
+#         run: terraform apply -input=false -auto-approve tfplan
