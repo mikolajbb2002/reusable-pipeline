@@ -73,7 +73,7 @@ jobs:
       - name: terraform init (no backend)
         run: terraform -chdir="${TF_WORKDIR}" init -backend=false -input=false
       - name: terraform validate
-      run: terraform -chdir="${TF_WORKDIR}" validate -no-color
+        run: terraform -chdir="${TF_WORKDIR}" validate -no-color
   plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
