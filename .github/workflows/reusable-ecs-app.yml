@@ -30,8 +30,11 @@ on:
         required: false
         type: string
     secrets:
-      aws_role_arn:
-        description: "OIDC: role ARN to assume for AWS access"
+      aws_plan_role_arn:
+        description: "OIDC: role for planning"
+        required: true
+      aws_apply_role_arn:
+        description: "OIDC: role for apply"
         required: true
       token:
         description: "GITHUB_TOKEN for checkout action"
@@ -60,6 +63,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.token }}
+      - name: Pick role ARN
+        id: pick
+        run: |
+          if [ "${{ inputs.auto_apply }}" = "true" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "role=${{ secrets.AWS_TERRAFORM_APPLY_ROLE_ARN }}" >> $GITHUB_OUTPUT
+          else
+            echo "role=${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}" >> $GITHUB_OUTPUT
+          fi
       - name: Validate role ARN is present
         run: |
           if [ -z "${{ secrets.aws_role_arn }}" ]; then
