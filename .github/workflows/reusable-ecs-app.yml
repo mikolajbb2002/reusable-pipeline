@@ -32,10 +32,10 @@ on:
     secrets:
       aws_plan_role_arn:
         description: "OIDC: role for planning"
-        required: true
+        required: false
       aws_apply_role_arn:
         description: "OIDC: role for apply"
-        required: true
+        required: false
       token:
         description: "GITHUB_TOKEN for checkout action"
         required: true
@@ -73,14 +73,14 @@ jobs:
           fi
       - name: Validate role ARN is present
         run: |
-          if [ -z "${{ secrets.aws_role_arn }}" ]; then
+          if [ -z "${{  steps.pick.outputs.role }}" ]; then
           echo "Missing secret 'aws_role_arn'. Ensure caller passes a non-empty ARN (e.g., secrets.AWS_ROLE_TO_ASSUME)." >&2
           exit 1
           fi
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.aws_role_arn }}
+          role-to-assume: ${{  steps.pick.outputs.role }}
           aws-region: ${{ inputs.aws_region }}
 
       - name: Setup Terraform
