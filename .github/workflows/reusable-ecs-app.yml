@@ -1,47 +1,91 @@
-name: Reusable workflow example
+name: Reusable Terraform
 
 on:
   workflow_call:
     inputs:
-      config-path:
+      tf_workdir:
+        description: "Folder with Terraform configuration"
         required: true
         type: string
-      environment:
+      terraform_version:
+        description: "Terraform version to use"
         required: false
         type: string
-        default: dev
-      component:
-        required: false
+        default: "1.9.5"
+      aws_region:
+        required: true
         type: string
-        default: app
-      auto-apply:
+      auto_apply:
+        description: "If true, applies the Terraform plan automatically (skipped for PRs)"
         required: false
         type: boolean
         default: false
+      ecr_repository_name:
+        required: false
+        type: string
+      ecr_image_tag:
+        required: false
+        type: string
+      ecs_cluster_name:
+        required: false
+        type: string
     secrets:
+      aws_role_arn:
+        description: "OIDC: role ARN to assume for AWS access"
+        required: true
       token:
+        description: "GITHUB_TOKEN for checkout action"
         required: true
 
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  infrastructure:
+  terraform:
     runs-on: ubuntu-latest
+    env:
+      TF_WORKDIR: ${{ inputs.tf_workdir }}
+      AWS_REGION: ${{ inputs.aws_region }}
+      TF_VAR_region: ${{ inputs.aws_region }}
+      ECR_REPOSITORY_NAME: ${{ inputs.ecr_repository_name }}
+      ECR_IMAGE_TAG: ${{ inputs.ecr_image_tag }}
+      ECS_CLUSTER_NAME: ${{ inputs.ecs_cluster_name }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Initialize environment
-      run: |
-        echo "Initializing component '${{ inputs.component }}' in environment '${{ inputs.environment }}'"
-    - name: Validate configuration
-      run: |
-        echo "Running shared validation checks..."
-    - name: Plan changes
-      run: |
-        echo "Generating change plan (dry run only)."
-    - name: Apply changes
-      if: inputs.auto-apply
-      run: |
-        echo "Applying changes for '${{ inputs.component }}' in '${{ inputs.environment }}'"
-    - name: Label pull request
-      uses: actions/labeler@v6
-      with:
-        repo-token: ${{ secrets.token }}
-        configuration-path: ${{ inputs.config-path }}
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.token }}
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_role_arn }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKDIR }}
+        run: terraform init -input=false
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_WORKDIR }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.TF_WORKDIR }}
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform Apply (optional)
+        if: ${{ inputs.auto_apply && github.event_name != 'pull_request' }}
+        working-directory: ${{ env.TF_WORKDIR }}
+        run: terraform apply -input=false -auto-approve tfplan
