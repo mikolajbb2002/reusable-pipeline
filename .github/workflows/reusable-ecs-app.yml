@@ -71,12 +71,6 @@ jobs:
           else
             echo "role=${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}" >> $GITHUB_OUTPUT
           fi
-      - name: Validate role ARN is present
-        run: |
-          if [ -z "${{  steps.pick.outputs.role }}" ]; then
-          echo "Missing secret 'aws_role_arn'. Ensure caller passes a non-empty ARN (e.g., secrets.AWS_ROLE_TO_ASSUME)." >&2
-          exit 1
-          fi
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
