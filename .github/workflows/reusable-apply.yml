@@ -77,6 +77,19 @@ jobs:
           role-to-assume: ${{ secrets.aws_apply_role_arn }}
           role-session-name: gha-apply-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Prepare workdir
+        run: mkdir -p "${TF_WORKDIR}"
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TF_WORKDIR }}
+      - name: terraform init
+        run: terraform -chdir="${TF_WORKDIR}" init -input=false
+      - name: Debug ls
+        run: ls -la "${TF_WORKDIR}"
       - name: terraform apply
         run: terraform -chdir="${TF_WORKDIR}" apply -auto-approve tfplan
 
