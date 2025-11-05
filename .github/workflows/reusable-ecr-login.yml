@@ -90,8 +90,7 @@ jobs:
             docker login --username AWS --password-stdin "$ECR_REGISTRY"
       - name: Build Docker image
         run: |
-          docker buildx build --platform linux/amd64 --load -f "$DOCKERFILE" -t "$ECR_REGISTRY/$ECR_REPOSITORY_NAME:$ECR_IMAGE_TAG" "$BUILD_CONTEXT"
-
+          docker buildx build --platform linux/amd64 --load -t "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY_NAME }}:${{ env.ECR_IMAGE_TAG }}"
       - name: Push Docker image to ECR
         run: |
           docker push "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY_NAME }}:${{ env.ECR_IMAGE_TAG }}"
