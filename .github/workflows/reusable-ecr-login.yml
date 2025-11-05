@@ -34,6 +34,10 @@ on:
         description: "Optional: ECS service name for force new deployment"
         required: false
         type: string
+      aws_account_id:
+        description: "AWS Account ID where ECR repository is located"
+        required: true
+        type: string
     secrets:
       aws_apply_role_arn:
         description: "OIDC: IAM role with ECR push (and optional ECS) permissions"
@@ -86,4 +90,18 @@ jobs:
             docker login --username AWS --password-stdin "$ECR_REGISTRY"
       - name: Build Docker image
         run: |
-          docker buil
+          docker buildx build --platform linux/amd64 --load -f "$DOCKERFILE" -t "$ECR_REGISTRY/$ECR_REPOSITORY_NAME:$ECR_IMAGE_TAG" "$BUILD_CONTEXT"
+
+      - name: Push Docker image to ECR
+        run: |
+          docker push "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY_NAME }}:${{ env.ECR_IMAGE_TAG }}"
+      - name: Force new ECS deployment (optional)
+        if: env.ECS_CLUSTER_NAME != '' && env.ECS_SERVICE_NAME != ''
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER_NAME" \
+            --service "$ECS_SERVICE_NAME" \
+            --force-new-deployment \
+            --region "$AWS_REGION"
