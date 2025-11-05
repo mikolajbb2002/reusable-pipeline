@@ -1,0 +1,76 @@
+name: Reusable Terraform Validate
+
+on:
+  workflow_call:
+    inputs:
+      tf_workdir:
+        description: "Folder with Terraform configuration"
+        required: true
+        type: string
+      terraform_version:
+        description: "Terraform version to use"
+        required: false
+        type: string
+        default: "1.9.5"
+      aws_region:
+        required: true
+        type: string
+      auto_apply:
+        description: "If true, applies the Terraform plan automatically (skipped for PRs)"
+        required: false
+        type: boolean
+        default: false
+      ecr_repository_name:
+        required: false
+        type: string
+      ecr_image_tag:
+        required: false
+        type: string
+      ecs_cluster_name:
+        required: false
+        type: string
+    secrets:
+      aws_plan_role_arn: 
+        description: "OIDC: role for planning"
+        required: false
+      aws_apply_role_arn:
+        description: "OIDC: role for apply"
+        required: false
+      token:
+        description: "GITHUB_TOKEN for checkout action"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TF_WORKDIR: ${{ inputs.tf_workdir }}
+  AWS_REGION: ${{ inputs.aws_region }}
+  TF_VAR_region: ${{ inputs.aws_region }}
+  ECR_REPOSITORY_NAME: ${{ inputs.ecr_repository_name }}
+  ECR_IMAGE_TAG: ${{ inputs.ecr_image_tag }}
+  ECS_CLUSTER_NAME: ${{ inputs.ecs_cluster_name }}
+  ECS_SERVICE_NAME: ${{ inputs.ecs_service_name }}
+  
+jobs:
+  validate:
+    name: Terraform fmt/init/validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: 
+          token: ${{ secrets.token }} 
+      - uses: hashicorp/setup-terraform@v3
+        with: 
+          terraform_version: ${{ inputs.terraform_version }}
+      - name: terraform fmt (check)
+        run: terraform -chdir="${TF_WORKDIR}" fmt -check -diff
+      - name: terraform init (no backend)
+        run: terraform -chdir="${TF_WORKDIR}" init -backend=false -input=false
+      - name: terraform validate
+        run: terraform -chdir="${TF_WORKDIR}" validate -no-color

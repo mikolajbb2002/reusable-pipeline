@@ -1,0 +1,92 @@
+name: Reusable Terraform Apply
+
+on:
+  workflow_call:
+    inputs:
+      tf_workdir:
+        description: "Folder with Terraform configuration"
+        required: true
+        type: string
+      terraform_version:
+        description: "Terraform version to use"
+        required: false
+        type: string
+        default: "1.9.5"
+      aws_region:
+        required: true
+        type: string
+      auto_apply:
+        description: "If true, applies the Terraform plan automatically (skipped for PRs)"
+        required: false
+        type: boolean
+        default: false
+      ecr_repository_name:
+        required: false
+        type: string
+      ecr_image_tag:
+        required: false
+        type: string
+      ecs_cluster_name:
+        required: false
+        type: string
+    secrets:
+      aws_apply_role_arn:
+        description: "OIDC: role for apply"
+        required: false
+      token:
+        description: "GITHUB_TOKEN for checkout action"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TF_WORKDIR: ${{ inputs.tf_workdir }}
+  AWS_REGION: ${{ inputs.aws_region }}
+  TF_VAR_region: ${{ inputs.aws_region }}
+  ECR_REPOSITORY_NAME: ${{ inputs.ecr_repository_name }}
+  ECR_IMAGE_TAG: ${{ inputs.ecr_image_tag }}
+  ECS_CLUSTER_NAME: ${{ inputs.ecs_cluster_name }}
+  ECS_SERVICE_NAME: ${{ inputs.ecs_service_name }}
+  
+jobs:
+  apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    if: ${{ inputs.auto_apply && github.event_name != 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+        with: 
+          token: ${{ secrets.token }} 
+      - uses: hashicorp/setup-terraform@v3
+        with: 
+             terraform_version: ${{ inputs.terraform_version }} 
+      - name: Check apply role ARN
+        run: |
+          if [ -z "${{ secrets.aws_apply_role_arn }}" ]; then
+            echo "Missing secret 'aws_apply_role_arn'." >&2; exit 1; fi
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_apply_role_arn }}
+          role-session-name: gha-apply-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: terraform init
+        run: terraform -chdir="${TF_WORKDIR}" init -input=false
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TF_WORKDIR }}
+
+      - name: terraform apply
+        run: terraform -chdir="${TF_WORKDIR}" apply -auto-approve tfplan
+
