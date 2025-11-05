@@ -1,0 +1,89 @@
+name: Reusable ECR Login + Push
+
+on:
+  workflow_call:
+    inputs:
+      aws_region:
+        description: "AWS region for ECR/ECS"
+        required: true
+        type: string
+      ecr_repository_name:
+        description: "Target ECR repository name"
+        required: true
+        type: string
+      ecr_image_tag:
+        description: "Image tag to push (defaults to short SHA if empty)"
+        required: false
+        type: string
+        default: "lastest"
+      build_context:
+        description: "Docker build context"
+        required: false
+        type: string
+        default: "."
+      dockerfile:
+        description: "Path to Dockerfile"
+        required: false
+        type: string
+        default: "Dockerfile"
+      ecs_cluster_name:
+        description: "Optional: ECS cluster name for force new deployment"
+        required: false
+        type: string
+      ecs_service_name:
+        description: "Optional: ECS service name for force new deployment"
+        required: false
+        type: string
+    secrets:
+      aws_apply_role_arn:
+        description: "OIDC: IAM role with ECR push (and optional ECS) permissions"
+        required: true
+      token:
+        description: "GITHUB_TOKEN for checkout action"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ inputs.aws_region }}
+  AWS_ACCOUNT_ID: ${{ inputs.aws_account_id }}
+  ECR_REPOSITORY_NAME: ${{ inputs.ecr_repository_name }}
+  ECR_IMAGE_TAG: ${{ inputs.ecr_image_tag }}
+  BUILD_CONTEXT: ${{ inputs.build_context }}
+  DOCKERFILE: ${{ inputs.dockerfile }}
+  ECS_CLUSTER_NAME: ${{ inputs.ecs_cluster_name }}
+  ECS_SERVICE_NAME: ${{ inputs.ecs_service_name }}
+  
+
+jobs:
+  ecr_login_push:
+    name: ECR Login and Push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.token }}
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_apply_role_arn }}
+          role-session-name: gha-ecr-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to ECR
+        id: ecr
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          aws ecr get-login-password --region "$AWS_REGION" | \
+            docker login --username AWS --password-stdin "$ECR_REGISTRY"
+      - name: Build Docker image
+        run: |
+          docker buil
