@@ -1,4 +1,4 @@
-name: Reusable ECR Login + Push
+name: Terraform ECR Login and Push
 
 on:
   workflow_call:
@@ -80,7 +80,8 @@ jobs:
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
-
+      - name: Resolve ECR registry
+        run: echo "ECR_REGISTRY=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com" >> $GITHUB_ENV
       - name: Login to ECR
         id: ecr
         env:
