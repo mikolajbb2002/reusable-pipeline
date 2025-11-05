@@ -15,7 +15,7 @@ on:
         description: "Image tag to push (defaults to short SHA if empty)"
         required: false
         type: string
-        default: "lastest"
+        default: "latest"
       build_context:
         description: "Docker build context"
         required: false
@@ -91,10 +91,15 @@ jobs:
             docker login --username AWS --password-stdin "$ECR_REGISTRY"
       - name: Build Docker image
         run: |
-          docker buildx build --platform linux/amd64 --load -t "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY_NAME }}:${{ env.ECR_IMAGE_TAG }}"
+          docker buildx build \
+            --platform linux/amd64 \
+            --load \
+            -f "$DOCKERFILE" \
+            -t "$ECR_REGISTRY/$ECR_REPOSITORY_NAME:$ECR_IMAGE_TAG" \
+            "$BUILD_CONTEXT"
       - name: Push Docker image to ECR
         run: |
-          docker push "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY_NAME }}:${{ env.ECR_IMAGE_TAG }}"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY_NAME:$ECR_IMAGE_TAG"
       - name: Force new ECS deployment (optional)
         if: env.ECS_CLUSTER_NAME != '' && env.ECS_SERVICE_NAME != ''
         env:
